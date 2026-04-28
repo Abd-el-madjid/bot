@@ -1,25 +1,31 @@
 import axios from "axios";
 
 export async function sendTelegram(text) {
-  if (!process.env.TG_TOKEN || !process.env.TG_CHAT_ID) {
-    console.error("Missing TG_TOKEN or TG_CHAT_ID environment variables.");
+  const token = process.env.TG_TOKEN;
+  const chatId = process.env.TG_CHAT_ID;
+
+  if (!token || !chatId) {
+    console.error("Missing TG_TOKEN or TG_CHAT_ID");
     return;
   }
 
   try {
     const res = await axios.post(
-      `https://api.telegram.org/bot${process.env.TG_TOKEN}/sendMessage`,
+      `https://api.telegram.org/bot${token}/sendMessage`,
       {
-        chat_id: process.env.TG_CHAT_ID,
+        chat_id: chatId,
         text,
         parse_mode: "HTML",
+        disable_web_page_preview: false,
       },
     );
 
     if (!res.data.ok) {
-      console.error("TG error:", res.data);
+      console.error("Telegram error:", res.data);
+    } else {
+      console.log("✅ Telegram message sent.");
     }
   } catch (err) {
-    console.error("TG request failed:", err.message);
+    console.error("Telegram request failed:", err.message);
   }
 }

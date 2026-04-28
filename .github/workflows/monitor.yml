@@ -2,12 +2,13 @@ name: Adhahi Monitor
 
 on:
   schedule:
-    - cron: "*/2 * * * *"
-  workflow_dispatch:
+    - cron: "*/5 * * * *"   # every 5 min (GitHub minimum is 5 min)
+  workflow_dispatch:         # allow manual run from GitHub UI
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
+    timeout-minutes: 8       # kill job if it hangs
 
     steps:
       - name: Checkout
@@ -19,25 +20,29 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: "npm"
 
-      - name: Install deps
-        run: npm install
+      - name: Install npm deps
+        run: npm ci
 
-      - name: Run script
+      - name: Install Playwright Chromium + system deps
+        run: npx playwright install chromium --with-deps
+
+      - name: Run monitor script
         env:
-          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_TOKEN:   ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           TARGET_URL: ${{ secrets.TARGET_URL }}
         run: node index.js
 
       - name: Commit state if changed
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add state.json
           if ! git diff --cached --quiet; then
-            git commit -m "Update notification state"
+            git commit -m "chore: update notification state [skip ci]"
             git push
           else
-            echo "No state changes"
+            echo "No state changes — skipping commit."
           fi

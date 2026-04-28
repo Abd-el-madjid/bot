@@ -1,59 +1,63 @@
 import { chromium } from "playwright";
 
+/**
+ * Opens the page, types the wilaya name into #reg-wilaya,
+ * waits for the dropdown, then checks if that wilaya has
+ * the "available" styling (emerald bg + cursor-pointer + no aria-disabled).
+ */
 export async function scanWilaya(browser, wilaya) {
   const url = process.env.TARGET_URL;
-  if (!url) {
-    throw new Error("TARGET_URL environment variable is required.");
-  }
+  if (!url) throw new Error("TARGET_URL environment variable is required.");
 
-  let page = await browser.newPage();
-
-  async function navigate() {
-    return page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 30000,
-    });
-  }
+  const page = await browser.newPage();
 
   try {
-    let response = await navigate();
+    /* ── 1. Load page ── */
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForSelector("#reg-wilaya", { timeout: 20000 });
 
-    if (!response || !response.ok()) {
-      await page.close();
-      page = await browser.newPage();
-      response = await navigate();
-    }
+    /* ── 2. Clear field then type wilaya name ── */
+    await page.click("#reg-wilaya");
+    await page.fill("#reg-wilaya", ""); // clear first
+    await page.type("#reg-wilaya", wilaya, { delay: 60 });
 
-    await page.waitForSelector("#reg-wilaya", { timeout: 15000 });
-    await page.fill("#reg-wilaya", wilaya);
-    await page.waitForTimeout(800);
+    /* ── 3. Wait for listbox to appear ── */
+    await page
+      .waitForSelector('[role="listbox"] li[role="option"]', { timeout: 5000 })
+      .catch(() => null);
 
-    const available = await page.evaluate((wilaya) => {
-      const items = document.querySelectorAll('[role="option"]');
+    await page.waitForTimeout(600);
+
+    /* ── 4. Evaluate availability ── */
+    const available = await page.evaluate((w) => {
+      const listbox = document.querySelector('[role="listbox"]');
+      if (!listbox) return false;
+
+      const items = listbox.querySelectorAll('li[role="option"]');
 
       for (const li of items) {
-        const text = li.textContent?.trim() || "";
-        if (!text.includes(wilaya)) continue;
+        const text = li.textContent?.trim() ?? "";
 
-        const availableText =
-          text.includes("حجز متوفر") || text.includes("متوفر");
-        const isGreenClass =
-          li.classList.contains("text-green-600") ||
-          li.classList.contains("bg-green-500") ||
-          li.classList.contains("green");
-        const colorStyle = window.getComputedStyle(li).color || "";
-        const isGreenColor = colorStyle.includes("green");
-        const isClickable =
-          !li.hasAttribute("aria-disabled") &&
-          li.classList.contains("cursor-pointer");
+        // Must contain the wilaya name
+        if (!text.includes(w)) continue;
 
-        if (
-          (availableText || isGreenClass || isGreenColor) &&
-          !li.hasAttribute("aria-disabled")
-        ) {
-          return true;
-        }
+        // Available items:
+        //  - have NO aria-disabled attribute
+        //  - have cursor-pointer (NOT cursor-not-allowed)
+        //  - text contains "حجز متوفر" (not "غير متوفر")
+        //  - Tailwind classes: bg-emerald-50/95, text-emerald-950, ring-emerald-200/90
+        const isDisabled = li.hasAttribute("aria-disabled");
+        const isClickable = li.classList.contains("cursor-pointer");
+        const textSaysAvailable =
+          text.includes("حجز متوفر") && !text.includes("غير متوفر");
+        const hasEmeraldBg =
+          li.classList.contains("bg-emerald-50/95") ||
+          [...li.classList].some((c) => c.startsWith("bg-emerald"));
+
+        if (!isDisabled && isClickable && textSaysAvailable) return true;
+        if (!isDisabled && hasEmeraldBg && textSaysAvailable) return true;
       }
+
       return false;
     }, wilaya);
 
