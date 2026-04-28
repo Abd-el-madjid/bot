@@ -1,9 +1,11 @@
 import axios from "axios";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 export async function sendTelegram(text) {
+  if (!process.env.TG_TOKEN || !process.env.TG_CHAT_ID) {
+    console.error("Missing TG_TOKEN or TG_CHAT_ID environment variables.");
+    return;
+  }
+
   try {
     const res = await axios.post(
       `https://api.telegram.org/bot${process.env.TG_TOKEN}/sendMessage`,
