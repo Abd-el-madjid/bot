@@ -6,32 +6,19 @@ import { sendTelegram } from "./telegram.js";
 dotenv.config();
 
 const WATCH_WILAYAS = [
-  "قسنطينة",
-  "ميلة",
-  "سكيكدة",
-  "أم البواقي",
-  "قالمة",
-  "سوق أهراس",
-  "عنابة",
-  "جيجل",
-  "خنشلة",
-  "باتنة",
-  "بسكرة",
-  "سطيف",
-  "برج بوعريريج",
+  "قسنطينة", "ميلة", "سكيكدة", "أم البواقي",
+  "قالمة", "سوق أهراس", "عنابة", "جيجل",
+  "خنشلة", "باتنة", "بسكرة", "سطيف", "برج بوعريريج",
 ];
 
 const STATE_FILE = new URL("./state.json", import.meta.url);
-const INTERVAL_SEC = 30; // check every 30 seconds
-const TOTAL_MINUTES = 4.5; // run for 4.5 min (GitHub job limit ~6 min)
+const INTERVAL_SEC = 30;     // check every 30 seconds
+const TOTAL_MINUTES = 4.5;   // run for 4.5 min (GitHub job limit ~6 min)
 const ITERATIONS = Math.floor((TOTAL_MINUTES * 60) / INTERVAL_SEC); // ~9 checks
 
 async function readState() {
-  try {
-    return JSON.parse(await fs.readFile(STATE_FILE, "utf-8"));
-  } catch {
-    return { notified: [] };
-  }
+  try { return JSON.parse(await fs.readFile(STATE_FILE, "utf-8")); }
+  catch { return { notified: [] }; }
 }
 
 async function writeState(state) {
@@ -39,7 +26,7 @@ async function writeState(state) {
 }
 
 function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function runCheck(notified) {
@@ -51,22 +38,20 @@ async function runCheck(notified) {
     return false;
   }
 
-  const watchedAvailable = available.filter((name) =>
-    WATCH_WILAYAS.some((w) => name.includes(w) || w.includes(name)),
+  const watchedAvailable = available.filter(name =>
+    WATCH_WILAYAS.some(w => name.includes(w) || w.includes(name))
   );
 
-  console.log(
-    `  ✅ Available (watched): ${watchedAvailable.join(", ") || "none"}`,
-  );
+  console.log(`  ✅ Available (watched): ${watchedAvailable.join(", ") || "none"}`);
 
-  const newlyAvailable = watchedAvailable.filter((w) => !notified.has(w));
+  const newlyAvailable = watchedAvailable.filter(w => !notified.has(w));
 
   if (newlyAvailable.length > 0) {
-    const lines = newlyAvailable.map((w) => `📍 <b>${w}</b>`).join("\n");
+    const lines = newlyAvailable.map(w => `📍 <b>${w}</b>`).join("\n");
     await sendTelegram(
-      `🎉 <b>حجز متوفر الآن!</b>\n\n${lines}\n\n🔗 <a href="${targetUrl}">سجّل الآن على adhahi.dz</a>\n🕐 ${new Date().toLocaleString("ar-DZ")}`,
+      `🎉 <b>حجز متوفر الآن!</b>\n\n${lines}\n\n🔗 <a href="${targetUrl}">سجّل الآن على adhahi.dz</a>\n🕐 ${new Date().toLocaleString("ar-DZ")}`
     );
-    newlyAvailable.forEach((w) => notified.add(w));
+    newlyAvailable.forEach(w => notified.add(w));
     console.log(`  📨 Telegram sent for: ${newlyAvailable.join(", ")}`);
     return true; // state changed
   }
@@ -83,21 +68,15 @@ async function runCheck(notified) {
 }
 
 async function main() {
-  if (
-    !process.env.TARGET_URL ||
-    !process.env.TG_TOKEN ||
-    !process.env.TG_CHAT_ID
-  ) {
+  if (!process.env.TARGET_URL || !process.env.TG_TOKEN || !process.env.TG_CHAT_ID) {
     console.error("❌ Missing env vars");
     process.exit(1);
   }
 
-  const state = await readState();
+  const state   = await readState();
   const notified = new Set(state.notified);
 
-  console.log(
-    `🚀 Starting loop: ${ITERATIONS} checks × every ${INTERVAL_SEC}s`,
-  );
+  console.log(`🚀 Starting loop: ${ITERATIONS} checks × every ${INTERVAL_SEC}s`);
 
   for (let i = 1; i <= ITERATIONS; i++) {
     console.log(`\n[${i}/${ITERATIONS}] ${new Date().toISOString()}`);

@@ -2,13 +2,13 @@ name: Adhahi Monitor
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # GitHub triggers every 5 min
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
-    timeout-minutes: 6        # 4.5 min loop + buffer
+    timeout-minutes: 6
 
     steps:
       - name: Checkout
@@ -22,15 +22,15 @@ jobs:
           node-version: 20
           cache: "npm"
 
-      - name: Install deps
+      - name: Install npm deps
         run: npm ci
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright Chromium only
         run: npx playwright install chromium --with-deps
 
-      - name: Run monitor (loops every 30s for 4.5 min)
+      - name: Run monitor
         env:
-          TG_TOKEN:   ${{ secrets.TG_TOKEN }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           TARGET_URL: ${{ secrets.TARGET_URL }}
         run: node index.js
@@ -44,5 +44,5 @@ jobs:
             git commit -m "chore: update state [skip ci]"
             git push
           else
-            echo "No state changes."
+            echo "No state changes"
           fi
