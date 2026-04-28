@@ -1,68 +1,85 @@
 import { chromium } from "playwright";
 
-/**
- * Opens the page, types the wilaya name into #reg-wilaya,
- * waits for the dropdown, then checks if that wilaya has
- * the "available" styling (emerald bg + cursor-pointer + no aria-disabled).
- */
-export async function scanWilaya(browser, wilaya) {
+export async function scanAllWilayas() {
   const url = process.env.TARGET_URL;
-  if (!url) throw new Error("TARGET_URL environment variable is required.");
+  if (!url) throw new Error("TARGET_URL is not set.");
 
-  const page = await browser.newPage();
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-blink-features=AutomationControlled",
+      "--disable-dev-shm-usage",
+    ],
+  });
+
+  const context = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    viewport: { width: 1366, height: 768 },
+    locale: "ar-DZ",
+    extraHTTPHeaders: {
+      "Accept-Language": "ar,fr;q=0.9,en;q=0.8",
+    },
+  });
+
+  // Hide automation fingerprints
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+    Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3] });
+    window.chrome = { runtime: {} };
+  });
+
+  const page = await context.newPage();
+
+  // Block heavy resources
+  await page.route("**/*", (route) => {
+    const type = route.request().resourceType();
+    if (["image", "font", "media"].includes(type)) route.abort();
+    else route.continue();
+  });
 
   try {
-    /* ── 1. Load page ── */
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForSelector("#reg-wilaya", { timeout: 20000 });
+    await page.goto(url, { waitUntil: "networkidle", timeout: 45000 });
 
-    /* ── 2. Clear field then type wilaya name ── */
-    await page.click("#reg-wilaya");
-    await page.fill("#reg-wilaya", ""); // clear first
-    await page.type("#reg-wilaya", wilaya, { delay: 60 });
+    // Try clicking the wilaya field to trigger the dropdown
+    const input = page.locator("#reg-wilaya");
+    await input.waitFor({ state: "visible", timeout: 30000 });
+    await input.click();
+    await page.waitForTimeout(800);
 
-    /* ── 3. Wait for listbox to appear ── */
-    await page
-      .waitForSelector('[role="listbox"] li[role="option"]', { timeout: 5000 })
-      .catch(() => null);
+    // Wait for dropdown list
+    await page.waitForSelector('ul[role="listbox"] li[role="option"]', {
+      timeout: 10000,
+    });
 
-    await page.waitForTimeout(600);
-
-    /* ── 4. Evaluate availability ── */
-    const available = await page.evaluate((w) => {
-      const listbox = document.querySelector('[role="listbox"]');
-      if (!listbox) return false;
-
-      const items = listbox.querySelectorAll('li[role="option"]');
-
-      for (const li of items) {
+    const results = await page.evaluate(() => {
+      const items = document.querySelectorAll(
+        'ul[role="listbox"] li[role="option"]',
+      );
+      const available = [],
+        unavailable = [];
+      items.forEach((li) => {
         const text = li.textContent?.trim() ?? "";
-
-        // Must contain the wilaya name
-        if (!text.includes(w)) continue;
-
-        // Available items:
-        //  - have NO aria-disabled attribute
-        //  - have cursor-pointer (NOT cursor-not-allowed)
-        //  - text contains "حجز متوفر" (not "غير متوفر")
-        //  - Tailwind classes: bg-emerald-50/95, text-emerald-950, ring-emerald-200/90
+        const name = text.split("—")[0].trim();
+        if (!name) return;
         const isDisabled = li.hasAttribute("aria-disabled");
         const isClickable = li.classList.contains("cursor-pointer");
-        const textSaysAvailable =
+        const textOk =
           text.includes("حجز متوفر") && !text.includes("غير متوفر");
-        const hasEmeraldBg =
-          li.classList.contains("bg-emerald-50/95") ||
-          [...li.classList].some((c) => c.startsWith("bg-emerald"));
+        if (!isDisabled && isClickable && textOk) available.push(name);
+        else unavailable.push(name);
+      });
+      return { available, unavailable };
+    });
 
-        if (!isDisabled && isClickable && textSaysAvailable) return true;
-        if (!isDisabled && hasEmeraldBg && textSaysAvailable) return true;
-      }
-
-      return false;
-    }, wilaya);
-
-    return available;
+    return {
+      ...results,
+      totalFound: results.available.length + results.unavailable.length,
+    };
   } finally {
-    await page.close();
+    await context.close();
+    await browser.close();
   }
 }
