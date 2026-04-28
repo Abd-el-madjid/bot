@@ -44,5 +44,5 @@ jobs:
             git commit -m "chore: update state [skip ci]"
             git push
           else
-            echo "No state changes."
+            echo "No state changes"
           fi
