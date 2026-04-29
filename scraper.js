@@ -41,7 +41,7 @@ export async function scanAllWilayas() {
   });
 
   try {
-    await page.goto(url, { waitUntil: "networkidle", timeout: 45000 });
+    await page.goto(url, { waitUntil: "networkidle", timeout: 80000 });
 
     // Try clicking the wilaya field to trigger the dropdown
     const input = page.locator("#reg-wilaya");
